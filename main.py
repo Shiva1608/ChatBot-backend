@@ -28,15 +28,6 @@ app.app_context().push()
 DATABASE = './instance/database.sqlite3'
 
 
-# # MySQL Configuration
-# app.config['MYSQL_HOST'] = 'localhost'
-# app.config['MYSQL_USER'] = 'your_mysql_user'
-# app.config['MYSQL_PASSWORD'] = 'your_mysql_password'
-# app.config['MYSQL_DB'] = 'user_db'
-
-# mysql = MySQL(app)
-
-
 @app.route('/update_url_vdb', methods=['POST'])
 def update_url_vdb():
     # try:
@@ -216,6 +207,57 @@ def get_response():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/get_chat")
+def get_chat():
+    user_id = request.args.get("userid")
+    if not user_id:
+        return jsonify({"error": "userid is required"}), 400
+    connection = sqlite3.connect(DATABASE)
+    if connection:
+        cursor = connection.cursor()
+        select_query = "SELECT chat_id FROM chat WHERE user_id = ?"
+        cursor.execute(select_query, (user_id, ))
+        chat = cursor.fetchall()
+        res = []
+        for index, id in enumerate(chat):
+            res.append({"id": index + 1, "chat_id": id[0]})
+        return jsonify(res)
+    else:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+
+@app.route("/get_current_chat")
+def get_current_chat():
+    user_id = request.args.get("userid")
+    chat_id = request.args.get("chatid")
+    print(user_id, chat_id)
+    if not user_id or not chat_id:
+        return jsonify({"error": "userid and chatid are required"}), 400
+    connection = sqlite3.connect(DATABASE)
+    if connection:
+        cursor = connection.cursor()
+        select_query = "SELECT uid, question, answer, time_stamp FROM chat_history WHERE user_id = ? AND chat_id = ?"
+        cursor.execute(select_query, (user_id, chat_id))
+        chat = cursor.fetchall()
+        res = []
+        for msg in chat:
+            res.append({
+                "id": msg[0],
+                "question": msg[1],
+                "answer": msg[2],
+                "timestamp": msg[3]
+            })
+        return jsonify(res)
+    else:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+
+
+@app.route("/voice", methods=["POST"])
+def text_to_voice():
+    data = request.json['inputText']
+    
 
 
 @app.route('/store_chat', methods=['POST'])

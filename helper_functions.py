@@ -14,6 +14,7 @@ from pytubefix import YouTube
 from pathlib import Path
 from llama_parse import LlamaParse
 import nest_asyncio
+import langchain
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
@@ -114,7 +115,7 @@ def convert_to_langchain_document(content: str, url: str, category: str, unique_
         }
     )
 
-    return document
+    return [document]
 
 
 def split_documents_into_chunks(documents: List[Document], chunk_size: int = 2000, chunk_overlap: int = 1000) -> List[
@@ -211,7 +212,9 @@ def manage_faiss_index(user_id: str, docs: List[Document], ids: List[str]) -> FA
 
         # Add new documents to the existing FAISS index
         vector_db.add_documents(documents=docs, ids=ids)
+        vector_db.save_local(index_path)
         print(f"Documents added to existing FAISS index for user {user_id}.")
+
 
     else:
         # If the index doesn't exist, create a new FAISS index from documents
@@ -339,7 +342,7 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
 
     # Initialize the ChatGroq model
     llm = ChatGroq(
-        model="llama-3.2-90b-text-preview",
+        model="llama-3.1-70b-versatile",
         temperature=0.6,
         max_retries=2,
         api_key=api_key
@@ -349,17 +352,10 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
     retriever = vector_db.as_retriever(
         search_kwargs={
             "filter": {"category": category},  # Filter to only include documents with category "asw"
-            "k": 5,  # Number of top documents to retrieve
+            "k": 10,  # Number of top documents to retrieve
             "similarity": "cosine"  # Specify the similarity measure (e.g., "cosine", "euclidean")
         }
     )
-    if not category:
-        retriever = vector_db.as_retriever(
-            search_kwargs={
-                "k": 5,  # Number of top documents to retrieve
-                "similarity": "cosine"  # Specify the similarity measure (e.g., "cosine", "euclidean")
-            }
-        )
     # Define the custom prompt template
     prompt_template = PromptTemplate(
         template="""Use the following documents to answer the question: , if there are no documents below use your own knowledge , you should reply like 
