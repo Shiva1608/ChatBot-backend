@@ -13,7 +13,8 @@ from helper_functions import (
     map_chat_num_to_uuids,
     manage_faiss_index, get_youtube_video_details,
     parse_pdf,
-    concatenate_document_text, load_faiss_vector_db, query_retrieval_qa
+    concatenate_document_text, load_faiss_vector_db, query_retrieval_qa,
+    getTitle
 )
 from model import db
 
@@ -36,7 +37,24 @@ def update_url_vdb():
     url = data.get("url")
     user_id = data.get("user_id")
     category = data.get("category")
-
+    
+    title = getTitle(url)
+    
+    connection = sqlite3.connect(DATABASE)
+    if connection:
+        cursor = connection.cursor()
+        insert_query = """
+            INSERT INTO memories (url, category, user_id, title)
+            VALUES (?, ?, ?, ?)
+        """
+        cursor.execute(insert_query, (url, category, user_id, title))
+        connection.commit()
+        cursor.close()
+        connection.close()
+    else:
+        return jsonify({"error": "Failed to connect to the database"}), 500
+    
+    
     if not url or not user_id or not category:
         return jsonify({"error": "Missing one or more required parameters: url, user_id, category"}), 400
 
@@ -254,10 +272,10 @@ def get_current_chat():
         return jsonify({"error": "Failed to connect to the database"}), 500
 
 
-@app.route("/voice", methods=["POST"])
-def text_to_voice():
+# @app.route("/voice", methods=["POST"])
+# def text_to_voice():
     data = request.json['inputText']
-    
+
 
 
 @app.route('/store_chat', methods=['POST'])

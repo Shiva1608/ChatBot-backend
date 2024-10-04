@@ -2,6 +2,8 @@
 from crawl4ai import WebCrawler
 import hashlib
 import hmac
+from bs4 import BeautifulSoup
+import requests
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import uuid
@@ -383,3 +385,19 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
     # langchain.debug = True
     result = qa_chain.invoke({"query": query})
     return result["result"]
+
+
+def getTitle(url):
+    # Fetch the content of the URL
+    response = requests.get(url)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the HTML content
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Extract the title
+        title = soup.title.string if soup.title else "No title found"
+        return title
+    else:
+        return (f"Failed to retrieve the URL: {response.status_code}")

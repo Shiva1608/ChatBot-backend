@@ -23,7 +23,7 @@ class User(db.Model):
 class Chat(db.Model):
     __tablename__ = 'chat'
 
-    chat_id = Column(String, primary_key=True, autoincrement=True)  # Auto-incremented primary key
+    chat_id = Column(String, primary_key=True)  # Auto-incremented primary key
     user_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)  # Foreign key from users
 
     # One-to-many relationship with ChatHistory
@@ -40,3 +40,15 @@ class ChatHistory(db.Model):
     question = Column(String(255), nullable=False)
     answer = Column(String(255), nullable=False)
     time_stamp = Column(DateTime, default=datetime.utcnow)  # Automatically set to current time
+
+
+class Memories(db.Model):
+    _tablename_ = 'memories'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # Auto-incremented primary key
+    url = Column(String(255), nullable=False)
+    category = Column(String(255), nullable=False)
+    title = Column(String(255), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.user_id'), nullable=False)  # Foreign key referencing users
+    # chat_num = Column(String(255), nullable=True)
+    # uuids = Column(String, nullable=True)  # uuids field to store UUIDs (as text)
