@@ -172,19 +172,7 @@ def map_chat_num_to_uuids(docs: List[Document]) -> Dict[int, List[str]]:
 load_dotenv()
 
 
-def manage_faiss_index(user_id: str, docs: List[Document], ids: List[str]) -> FAISS:
-    """
-    Manages FAISS index for a given user. If an index for the user_id already exists, it loads the index and adds documents.
-    Otherwise, it creates a new index from the provided documents and saves it.
-
-    Args:
-        user_id (str): The user ID (used to name the FAISS index file).
-        docs (List[Document]): The list of LangChain documents to add to the FAISS index.
-        ids (List[str]): The unique IDs corresponding to each document.
-
-    Returns:
-        FAISS: The FAISS vector store.
-    """
+def manage_faiss_index(docs: List[Document], ids: List[str]) -> FAISS:
     # Load the API key from the environment variables
     api_key = os.getenv("GOOGLE_API_KEY")
 
@@ -197,13 +185,13 @@ def manage_faiss_index(user_id: str, docs: List[Document], ids: List[str]) -> FA
         api_key=api_key
     )
 
-    # Define the path where the FAISS index is saved (based on user_id)
-    index_path = f"faiss_index_{user_id}"
+    # Define the path where the FAISS index is saved
+    index_path = "faiss_index"
 
-    # Check if the FAISS index folder for the user_id exists
+    # Check if the FAISS index folder exists
     if os.path.exists(index_path):
         # If the index already exists, load the FAISS index
-        print(f"FAISS index for user {user_id} exists. Loading index...")
+        print("FAISS index already exists. Loading index...")
         vector_db = FAISS.load_local(
             index_path,
             embeddings=embeddings_model,
@@ -213,42 +201,49 @@ def manage_faiss_index(user_id: str, docs: List[Document], ids: List[str]) -> FA
         # Add new documents to the existing FAISS index
         vector_db.add_documents(documents=docs, ids=ids)
         vector_db.save_local(index_path)
-        print(f"Documents added to existing FAISS index for user {user_id}.")
+        print("Documents added to existing FAISS index.")
 
 
     else:
         # If the index doesn't exist, create a new FAISS index from documents
-        print(f"FAISS index for user {user_id} does not exist. Creating new index...")
+        print("FAISS index does not exist. Creating new index...")
         vector_db = FAISS.from_documents(documents=docs, embedding=embeddings_model, ids=ids)
 
         # Save the newly created FAISS index locally
         vector_db.save_local(index_path)
-        print(f"FAISS index for user {user_id} created and saved.")
+        print("FAISS index created and saved.")
 
     return vector_db
 
 
 def get_youtube_video_details(url):
+    print(url)
     # Create a YouTube object
     yt = YouTube(url)
 
+    print(yt.title, yt.captions, yt.keywords, sep="\n")
     # Access available captions
     subtitles = yt.captions
 
     # Check for 'en-IN' or 'e.in' captions
-    if 'en-IN' in subtitles or 'e.in' in subtitles:
+    if 'en-IN' in subtitles or 'e.in' in subtitles or 'en' in subtitles or 'a.en' in subtitles:
         # Fetch captions based on available language code
         if 'en-IN' in subtitles:
-            caption = subtitles['en-IN']  # Access directly as a dictionary
-        else:
-            caption = subtitles['e.in']  # Access directly as a dictionary
+            caption = subtitles['en-IN']
+        elif 'e.in' in subtitles:
+            caption = subtitles['e.in']
+        elif 'en' in subtitles:
+            caption = subtitles['en']
+        elif 'a.in' in subtitles:
+            caption = subtitles['a.in']
 
         # Generate the subtitle content
         document_content = caption.generate_srt_captions()
+        print(document_content)
         title = yt.title  # Get video title
         return document_content
     else:
-        return None, "Please provide a YouTube video that has English auto-generated subtitles."
+        return None
 
 
 def parse_pdf(pdf_path):
@@ -287,17 +282,7 @@ def concatenate_document_text(document):
     return document_content
 
 
-def load_faiss_vector_db(user_id: int) -> FAISS:
-    """
-    Function to load a FAISS vector database for a given user_id.
-    
-    Parameters:
-    user_id (str): The user ID for which to load the FAISS index.
-    
-    Returns:
-    FAISS: The loaded FAISS vector store.
-    """
-
+def load_faiss_vector_db() -> FAISS:
     # Get the API key from environment variables
     api_key = os.getenv("GOOGLE_API_KEY")
 
@@ -309,10 +294,9 @@ def load_faiss_vector_db(user_id: int) -> FAISS:
         model="models/embedding-001",  # Replace with the actual model name
         api_key=api_key  # Pass the API key dynamically
     )
-    user_id = str(user_id)
-    # Load the vector database from local storage using user_id
+    # Load the vector database from local storage
     vector_db = FAISS.load_local(
-        f"faiss_index_{user_id}",  # Use the user_id to specify the index path
+        "faiss_index",
         embeddings=embeddings_model,
         allow_dangerous_deserialization=True  # Enable deserialization
     )
@@ -321,22 +305,10 @@ def load_faiss_vector_db(user_id: int) -> FAISS:
 
 
 def query_retrieval_qa(query: str, category: str = None, vector_db=None):
-    """
-    Function to run a query through the RetrievalQA chain. 
-    If a category is provided, it applies a filter based on the category.
-    
-    Parameters:
-    query (str): The question to be answered.
-    category (str, optional): The category to filter the FAISS search. Defaults to None.
-    vector_db: The FAISS vector store that acts as the retriever.
-
-    Returns:
-    dict: The result of the query processing.
-    """
-
     # Ensure the GROQ API key is in the environment
     api_key = os.getenv("GROQ_API_KEY")
 
+    print(query, category, vector_db)
     if api_key is None:
         raise ValueError("GROQ_API_KEY not found in environment variables")
 
@@ -351,7 +323,7 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
     # Set up the retriever from the vector DB
     retriever = vector_db.as_retriever(
         search_kwargs={
-            "filter": {"category": category},  # Filter to only include documents with category "asw"
+            # "filter": {"category": category},  # Filter to only include documents with category "asw"
             "k": 10,  # Number of top documents to retrieve
             "similarity": "cosine"  # Specify the similarity measure (e.g., "cosine", "euclidean")
         }
@@ -359,7 +331,7 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
     # Define the custom prompt template
     prompt_template = PromptTemplate(
         template="""Use the following documents to answer the question: , if there are no documents below use your own knowledge , you should reply like 
-    "there is no relevant documents saved in memory ,based on my knowledge" and your answer
+    "there is no relevant documents saved in memory ,based on my knowledge" and your answer. Response should be markdown only, enclose with single ticks.
         
         {context}
         
@@ -382,4 +354,5 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
     # Enable debugging 
     # langchain.debug = True
     result = qa_chain.invoke({"query": query})
+    print(result)
     return result["result"]

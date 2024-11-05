@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify
-# from flask_mysqldb import MySQL
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
@@ -34,35 +33,35 @@ def update_url_vdb():
     # Parse request body
     data = request.get_json()
     url = data.get("url")
-    user_id = data.get("user_id")
     category = data.get("category")
 
-    if not url or not user_id or not category:
-        return jsonify({"error": "Missing one or more required parameters: url, user_id, category"}), 400
+    if not url or not category:
+        return jsonify({"error": "Missing one or more required parameters: url, category"}), 400
 
     # Step 1: Extract content from the URL
     scraped_data = extract_content_from_url(url)
+    print(scraped_data)
 
     # Step 2: Generate a unique number from the URL
     unique_number = generate_number_from_input(url)
+    print(unique_number)
 
     # Step 3: Convert the scraped data into a LangChain document
     document = convert_to_langchain_document(scraped_data, url, category, unique_number)
+    print(document)
 
     # Step 4: Split documents into chunks
     docs = split_documents_into_chunks(document)
 
     # Step 5: Map chat_num to UUIDs
-    ids = map_chat_num_to_uuids(docs)[0]
-    chat_num_uuid_mapping = map_chat_num_to_uuids(docs)[1]
+    ids, chat_num_uuid_mapping = map_chat_num_to_uuids(docs)
 
     # Step 6: Manage the FAISS index for the given user_id
-    vector_db = manage_faiss_index(user_id, docs, ids)
+    vector_db = manage_faiss_index(docs, ids)
 
     # Return a successful response
     return jsonify({
         "message": "FAISS vector database updated successfully.",
-        "user_id": user_id,
         "url": url,
         "category": category,
         "uuid_mapping": chat_num_uuid_mapping
@@ -78,16 +77,15 @@ def update_yt_url_vdb():
         # Get data from request body
         data = request.get_json()
         url = data.get('url')
-        user_id = data.get('user_id')
         category = data.get('category')
 
-        if not url or not user_id or not category:
-            return jsonify({"error": "url, user_id, and category are required fields."}), 400
+        if not url or not category:
+            return jsonify({"error": "url and category are required fields."}), 400
 
         # Fetch YouTube video details
         document_content = get_youtube_video_details(url)
 
-        if document_content.startswith("Please provide"):
+        if document_content is None:
             return jsonify({"error": document_content}), 400
 
         # Generate unique number based on input
@@ -103,19 +101,18 @@ def update_yt_url_vdb():
         ids, chat_num_uuid_mapping = map_chat_num_to_uuids(docs)
 
         # Manage FAISS vector index
-        vector_db = manage_faiss_index(user_id, docs, ids)
+        vector_db = manage_faiss_index(docs, ids)
 
         # Return the success response
         return jsonify({
             "message": "FAISS vector database updated successfully.",
-            "user_id": user_id,
             "url": url,
             "category": category,
             "uuid_mapping": chat_num_uuid_mapping
         }), 200
 
     except Exception as e:
-        # Handle any exceptions and return an error message
+        print(e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -138,14 +135,12 @@ def update_pdf_vdb():
         pdf_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
         file.save(pdf_path)
 
-    # user_id = data.get('user_id')
     # category = data.get('category')
-    user_id = 1004
     category = "Resume"
 
-    if not pdf_path or not user_id or not category:
+    if not pdf_path or not category:
         print(3)
-        return jsonify({"error": "pdf_path, user_id, and category are required fields."}), 400
+        return jsonify({"error": "pdf_path and category are required fields."}), 400
 
     # Parse the PDF
     document = parse_pdf(pdf_path)
@@ -165,12 +160,11 @@ def update_pdf_vdb():
     ids, chat_num_uuid_mapping = map_chat_num_to_uuids(docs)
 
     # Manage FAISS vector index
-    vector_db = manage_faiss_index(str(user_id), docs, ids)
+    vector_db = manage_faiss_index(docs, ids)
 
     # Return the success response
     return jsonify({
         "message": "FAISS vector database updated successfully.",
-        "user_id": user_id,
         "source": pdf_name,
         "category": category,
         "uuid_mapping": chat_num_uuid_mapping
@@ -184,20 +178,19 @@ def update_pdf_vdb():
 @app.route('/response', methods=['POST'])
 def get_response():
     """
-    Flask route to process a query with a FAISS retriever based on user_id and category.
+    Flask route to process a query with a FAISS retriever based on and category.
     """
     try:
         # Get parameters from the request
         data = request.get_json()
-        user_id = data.get('user_id')
         query = data.get('query')
         category = data.get('category', None)  # Optional, default to None
         print(category)
-        if not user_id or not query:
-            return jsonify({"error": "user_id and query are required fields"}), 400
+        if not query:
+            return jsonify({"error": "query is a required field"}), 400
 
         # Load FAISS vector database for the given user_id
-        vect_db = load_faiss_vector_db(user_id)
+        vect_db = load_faiss_vector_db()
 
         # Run the query retrieval
         output = query_retrieval_qa(query, category, vect_db)
@@ -218,7 +211,7 @@ def get_chat():
     if connection:
         cursor = connection.cursor()
         select_query = "SELECT chat_id FROM chat WHERE user_id = ?"
-        cursor.execute(select_query, (user_id, ))
+        cursor.execute(select_query, (user_id,))
         chat = cursor.fetchall()
         res = []
         for index, id in enumerate(chat):
@@ -257,7 +250,6 @@ def get_current_chat():
 @app.route("/voice", methods=["POST"])
 def text_to_voice():
     data = request.json['inputText']
-    
 
 
 @app.route('/store_chat', methods=['POST'])
