@@ -1,0 +1,13 @@
+{
+    "manifest_version": 3,
+    "name": "URL Capture Extension",
+    "version": "1.0",
+    "description": "Captures website URLs from right-click menu",
+    "permissions": ["contextMenus", "tabs", "storage", "cookies"],
+    "host_permissions": [
+    "http://127.0.0.1:4200/*"
+    ],
+    "background": {
+      "service_worker": "background.js"
+    }
+  }
