@@ -2,6 +2,8 @@
 from crawl4ai import WebCrawler
 import hashlib
 import hmac
+from datetime import datetime
+import google.generativeai as genai
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import uuid
@@ -18,6 +20,9 @@ import langchain
 from langchain_groq import ChatGroq
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
+load_dotenv()
+
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
 
 # Define the function to crawl the URL and return content
@@ -341,7 +346,7 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
         input_variables=["context", "question"]
     )
 
-    # Create the RetrievalQA chain
+    # Create the RetrievalQA chainx
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",  # Use "stuff", "map_reduce", etc.
@@ -356,3 +361,13 @@ def query_retrieval_qa(query: str, category: str = None, vector_db=None):
     result = qa_chain.invoke({"query": query})
     print(result)
     return result["result"]
+
+
+def summarize_with_gemini(question):
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(f"Summarize this in three or four words. \n Input : {question}")
+        return response.text.strip()
+    except Exception as e:
+        print(f"Error with Gemini API: {e}")
+        return "No summary available"

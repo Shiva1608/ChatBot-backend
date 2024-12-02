@@ -12,7 +12,7 @@ from helper_functions import (
     map_chat_num_to_uuids,
     manage_faiss_index, get_youtube_video_details,
     parse_pdf,
-    concatenate_document_text, load_faiss_vector_db, query_retrieval_qa
+    concatenate_document_text, load_faiss_vector_db, query_retrieval_qa, summarize_with_gemini
 )
 from model import db
 
@@ -210,12 +210,12 @@ def get_chat():
     connection = sqlite3.connect(DATABASE)
     if connection:
         cursor = connection.cursor()
-        select_query = "SELECT chat_id FROM chat WHERE user_id = ?"
+        select_query = "SELECT chat_id, description FROM chat WHERE user_id = ?"
         cursor.execute(select_query, (user_id,))
         chat = cursor.fetchall()
         res = []
         for index, id in enumerate(chat):
-            res.append({"id": index + 1, "chat_id": id[0]})
+            res.append({"id": index + 1, "chat_description": id[1], "chat_id": id[0]})
         return jsonify(res)
     else:
         return jsonify({"error": "Failed to connect to the database"}), 500
@@ -254,52 +254,50 @@ def text_to_voice():
 
 @app.route('/store_chat', methods=['POST'])
 def store_chat():
-    # Extract data from the incoming JSON request
     data = request.json
     user_id = data['user_id']
     chat_id = data['chat_id']
     question = data['question']
     answer = data['answer']
 
-    # Validate that all required fields are provided
+    # Validate inputs
     if not user_id or not chat_id or not question or not answer:
-        return jsonify({"error": "user_id, question, and answer are required"}), 400
+        return jsonify({"error": "user_id, chat_id, question, and answer are required"}), 400
 
-    # Store the chat in the database
+    # Connect to the database
     connection = sqlite3.connect(DATABASE)
-    if connection:
-        # try:
-        cursor = connection.cursor()
-        select_query = "SELECT chat_id FROM chat WHERE user_id = ? AND chat_id = ?"
-        cursor.execute(select_query, (user_id, chat_id))
-        chat = cursor.fetchone()
+    cursor = connection.cursor()
 
-        if not chat:
-            insert_query1 = """
-                        INSERT INTO chat (user_id, chat_id)
-                        VALUES (?, ?)
-                    """
-            cursor.execute(insert_query1, (user_id, chat_id))
-            connection.commit()
-        # Insert query to store the question, response, and timestamp
-        insert_query = """
-            INSERT INTO chat_history (user_id, chat_id, question, answer, time_stamp)
-            VALUES (?, ?, ?, ?, ?)
+    # Check if chat already exists
+    select_query = "SELECT chat_id FROM chat WHERE user_id = ? AND chat_id = ?"
+    cursor.execute(select_query, (user_id, chat_id))
+    chat = cursor.fetchone()
+
+    if not chat:
+        summary = summarize_with_gemini(question)
+
+        # Insert new chat with summary
+        insert_query_chat = """
+            INSERT INTO chat (user_id, chat_id, description)
+            VALUES (?, ?, ?)
         """
-        time_now = datetime.now()
-        cursor.execute(insert_query, (user_id, chat_id, question, answer, time_now))
+        cursor.execute(insert_query_chat, (user_id, chat_id, summary))
         connection.commit()
 
-        # Close the cursor and connection
-        cursor.close()
-        connection.close()
+    # Insert chat history as before
+    insert_query_history = """
+        INSERT INTO chat_history (user_id, chat_id, question, answer, time_stamp)
+        VALUES (?, ?, ?, ?, ?)
+    """
+    time_now = datetime.now()
+    cursor.execute(insert_query_history, (user_id, chat_id, question, answer, time_now))
+    connection.commit()
 
-        # Return a success message
-        return jsonify({"message": "Chat stored successfully"}), 201
-        # except Exception as e:
-        #     return jsonify({"error": f"Database error: {e}"}), 500
-    else:
-        return jsonify({"error": "Failed to connect to the database"}), 500
+    # Close connections
+    cursor.close()
+    connection.close()
+
+    return jsonify({"message": "Chat stored successfully"}), 201
 
 
 # Signup API function
